@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>BodyAligner - 체형분석 웹앱</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0a0e1a;
+  --surface: #111827;
+  --surface2: #1a2236;
+  --accent: #3b82f6;
+  --accent2: #06b6d4;
+  --good: #10b981;
+  --warn: #f59e0b;
+  --alert: #ef4444;
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --text3: #64748b;
+  --border: #1e293b;
+  --radius: 14px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Noto Sans KR',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; }
+.mono { font-family:'JetBrains Mono',monospace; }
+
+/* Screens */
+.screen { display:none; width:100%; min-height:100vh; }
+.screen.active { display:flex; flex-direction:column; }
+
+/* Header */
+.header { padding:16px 20px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+.header h1 { font-size:18px; font-weight:700; }
+.header .badge { font-size:11px; background:var(--accent); color:#fff; padding:2px 8px; border-radius:20px; }
+
+/* Home Screen */
+.home { align-items:center; justify-content:center; padding:40px 20px; gap:30px; text-align:center; }
+.home .logo { font-size:72px; }
+.home h1 { font-size:32px; font-weight:900; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.home p { color:var(--text2); font-size:15px; max-width:360px; line-height:1.6; }
+.feature-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:360px; width:100%; }
+.feature-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; text-align:left; }
+.feature-card .icon { font-size:24px; margin-bottom:8px; }
+.feature-card h3 { font-size:13px; font-weight:600; margin-bottom:4px; }
+.feature-card p { font-size:11px; color:var(--text3); }
+
+/* Buttons */
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:14px 28px; border-radius:var(--radius); border:none; font-family:inherit; font-size:15px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+.btn-primary { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; width:100%; max-width:360px; }
+.btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(59,130,246,0.3); }
+.btn-secondary { background:var(--surface2); color:var(--text); border:1px solid var(--border); }
+.btn-danger { background:var(--alert); color:#fff; }
+.btn-success { background:var(--good); color:#fff; }
+.btn-sm { padding:8px 16px; font-size:13px; }
+.btn:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+
+/* Form */
+.form-section { padding:20px; max-width:480px; margin:0 auto; width:100%; }
+.form-group { margin-bottom:20px; }
+.form-group label { display:block; font-size:13px; font-weight:600; color:var(--text2); margin-bottom:6px; }
+.form-group input, .form-group select { width:100%; padding:12px 16px; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit; font-size:15px; }
+.form-group input:focus, .form-group select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(59,130,246,0.15); }
+.form-row { display:flex; gap:12px; }
+.form-row .form-group { flex:1; }
+.form-hint { font-size:11px; color:var(--text3); margin-top:4px; }
+
+/* Camera View */
+.camera-container { position:relative; flex:1; background:#000; overflow:hidden; }
+.camera-container video { width:100%; height:100%; object-fit:cover; }
+.camera-container canvas { position:absolute; top:0; left:0; width:100%; height:100%; }
+.camera-overlay { position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column; pointer-events:none; }
+.camera-overlay > * { pointer-events:auto; }
+.camera-top { padding:12px 16px; display:flex; justify-content:space-between; align-items:center; }
+.camera-bottom { margin-top:auto; padding:20px; display:flex; flex-direction:column; align-items:center; gap:12px; }
+.phase-badge { padding:6px 16px; border-radius:20px; font-size:13px; font-weight:600; color:#fff; }
+.phase-cal { background:rgba(245,158,11,0.8); }
+.phase-ant { background:rgba(59,130,246,0.8); }
+.phase-lat { background:rgba(6,182,212,0.8); }
+.phase-pos { background:rgba(168,85,247,0.8); }
+.phase-done { background:rgba(16,185,129,0.8); }
+
+.tracking-badge { padding:6px 14px; border-radius:20px; font-size:12px; display:flex; align-items:center; gap:6px; }
+.tracking-on { background:rgba(16,185,129,0.2); color:#10b981; border:1px solid rgba(16,185,129,0.3); }
+.tracking-off { background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.3); }
+
+.capture-btn { width:72px; height:72px; border-radius:50%; border:4px solid #fff; background:rgba(255,255,255,0.9); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:24px; transition:all 0.2s; }
+.capture-btn:hover { transform:scale(1.05); }
+.capture-btn:disabled { background:rgba(255,255,255,0.3); border-color:rgba(255,255,255,0.3); }
+.capture-btn.recording { background:rgba(239,68,68,0.8); border-color:#ef4444; animation:pulse 1s infinite; }
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+
+.progress-bar { width:240px; height:8px; background:rgba(255,255,255,0.2); border-radius:4px; overflow:hidden; }
+.progress-fill { height:100%; background:var(--accent); border-radius:4px; transition:width 0.1s linear; }
+.countdown { font-size:48px; font-weight:900; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,0.5); }
+
+.live-height { background:rgba(0,0,0,0.6); padding:8px 16px; border-radius:10px; display:flex; align-items:center; gap:16px; }
+.live-height .col { text-align:center; }
+.live-height .label { font-size:9px; color:rgba(255,255,255,0.5); }
+.live-height .val { font-size:16px; font-weight:700; color:#fff; }
+.live-height .val.cyan { color:var(--accent2); }
+.live-height .val.orange { color:var(--warn); }
+
+.capture-dots { display:flex; gap:12px; background:rgba(0,0,0,0.5); padding:6px 16px; border-radius:20px; }
+.cap-dot { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.cap-dot .circle { width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,0.3); }
+.cap-dot .circle.done { background:var(--good); border-color:var(--good); }
+.cap-dot .txt { font-size:9px; color:rgba(255,255,255,0.5); }
+
+.cal-result { background:rgba(0,0,0,0.7); padding:16px 24px; border-radius:14px; text-align:center; }
+.cal-result h3 { color:var(--good); margin-bottom:10px; }
+.cal-row { display:flex; justify-content:center; gap:20px; margin:8px 0; }
+.cal-col { text-align:center; }
+.cal-col .lb { font-size:9px; color:rgba(255,255,255,0.5); }
+.cal-col .vl { font-size:18px; font-weight:700; }
+
+/* Results Screen */
+.results-scroll { flex:1; overflow-y:auto; padding:20px; padding-bottom:100px; }
+.score-hero { text-align:center; padding:30px 20px; background:var(--surface); border-radius:var(--radius); margin-bottom:16px; border:1px solid var(--border); }
+.score-circle { position:relative; width:160px; height:160px; margin:0 auto 16px; }
+.score-circle svg { transform:rotate(-90deg); }
+.score-circle .score-text { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.score-circle .score-num { font-size:40px; font-weight:900; }
+.score-circle .score-unit { font-size:12px; color:var(--text3); }
+.grade-badge { display:inline-block; padding:4px 16px; border-radius:20px; font-size:14px; font-weight:700; }
+.grade-green { background:rgba(16,185,129,0.15); color:var(--good); }
+.grade-blue { background:rgba(59,130,246,0.15); color:var(--accent); }
+.grade-teal { background:rgba(6,182,212,0.15); color:var(--accent2); }
+.grade-orange { background:rgba(245,158,11,0.15); color:var(--warn); }
+.grade-red { background:rgba(239,68,68,0.15); color:var(--alert); }
+
+.sub-scores { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:16px; }
+.sub-score-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px; text-align:center; }
+.sub-score-card .val { font-size:20px; font-weight:700; }
+.sub-score-card .lb { font-size:10px; color:var(--text3); margin-top:2px; }
+
+.section-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:16px; overflow:hidden; }
+.section-head { padding:14px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); cursor:pointer; }
+.section-head .icon { font-size:18px; }
+.section-head h3 { font-size:14px; font-weight:600; flex:1; }
+.section-head .chevron { font-size:12px; color:var(--text3); transition:transform 0.2s; }
+.section-head.open .chevron { transform:rotate(180deg); }
+.section-body { padding:0; max-height:0; overflow:hidden; transition:max-height 0.3s ease; }
+.section-body.open { max-height:9999px; }
+
+.mrow { display:flex; align-items:center; padding:10px 16px; border-bottom:1px solid var(--border); gap:10px; }
+.mrow:last-child { border-bottom:none; }
+.mrow .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.mrow .info { flex:1; }
+.mrow .title { font-size:13px; font-weight:500; }
+.mrow .norm { font-size:10px; color:var(--text3); }
+.mrow .value { font-size:14px; font-weight:600; font-family:'JetBrains Mono',monospace; }
+.dot-good { background:var(--good); } .dot-warn { background:var(--warn); } .dot-alert { background:var(--alert); } .dot-normal { background:var(--accent); }
+.val-good { color:var(--good); } .val-warn { color:var(--warn); } .val-alert { color:var(--alert); } .val-normal { color:var(--accent); }
+
+.finding-card { margin:8px 16px; padding:12px; border-radius:10px; }
+.finding-warn { background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2); }
+.finding-alert { background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); }
+.finding-card .sev { font-size:12px; margin-bottom:4px; }
+.finding-card .cond { font-size:13px; font-weight:600; margin-bottom:4px; }
+.finding-card .detail { font-size:11px; color:var(--text2); margin-bottom:4px; }
+.finding-card .risk { font-size:11px; color:var(--warn); }
+
+.ex-group { margin:8px 16px 16px; }
+.ex-group-title { font-size:13px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+.ex-item { background:var(--surface2); border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+.ex-item .cat-badge { display:inline-block; font-size:10px; font-weight:600; padding:2px 8px; border-radius:10px; color:#fff; margin-bottom:4px; }
+.cat-근력 { background:#3b82f6; } .cat-스트레칭 { background:#06b6d4; } .cat-자세교정 { background:#8b5cf6; }
+.cat-자가이완 { background:#6366f1; } .cat-ROM { background:#f59e0b; } .cat-가동성 { background:#14b8a6; }
+.cat-호흡 { background:#22d3ee; } .cat-코어 { background:#10b981; } .cat-교정운동 { background:#a855f7; }
+.cat-통합운동 { background:#78716c; } .cat-전문의뢰 { background:#ef4444; } .cat-생활습관 { background:#64748b; }
+.cat-코어안정화 { background:#10b981; }
+.ex-item .name { font-size:12px; font-weight:500; margin-bottom:4px; }
+.ex-item .meta { font-size:10px; color:var(--accent2); display:flex; gap:8px; flex-wrap:wrap; }
+.ex-item .note { font-size:10px; color:var(--text3); margin-top:4px; }
+
+.bottom-actions { position:fixed; bottom:0; left:0; right:0; padding:12px 20px; background:var(--surface); border-top:1px solid var(--border); display:flex; gap:10px; }
+.bottom-actions .btn { flex:1; }
+
+/* Google Sheets Config */
+.sheets-config { background:var(--surface2); border-radius:10px; padding:16px; margin:16px 0; }
+.sheets-config label { font-size:12px; color:var(--text2); }
+.sheets-config input { margin-top:4px; }
+.sheets-status { font-size:11px; margin-top:6px; }
+.sheets-ok { color:var(--good); }
+.sheets-err { color:var(--alert); }
+
+/* Toast */
+.toast { position:fixed; top:20px; left:50%; transform:translateX(-50%); padding:10px 20px; border-radius:10px; font-size:13px; font-weight:500; z-index:9999; opacity:0; transition:opacity 0.3s; pointer-events:none; }
+.toast.show { opacity:1; }
+.toast-success { background:var(--good); color:#fff; }
+.toast-error { background:var(--alert); color:#fff; }
+
+/* Disclaimer */
+.disclaimer { background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2); border-radius:10px; padding:12px 16px; margin:16px 0; font-size:11px; color:var(--warn); line-height:1.5; }
+
+/* Responsive */
+@media (min-width:768px) {
+  .home h1 { font-size:40px; }
+  .form-section { max-width:520px; }
+  .results-scroll { max-width:600px; margin:0 auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════ SCREEN 1: HOME ═══════ -->
+<div id="homeScreen" class="screen active home">
+  <div class="logo">🦴</div>
+  <h1>BodyAligner</h1>
+  <p>MediaPipe Pose 기반 체형분석 · 임상 해석 · ACSM 운동처방 · 구글시트 자동 저장</p>
+  <div class="feature-grid">
+    <div class="feature-card"><div class="icon">📷</div><h3>3방향 촬영</h3><p>앞면·옆면·뒷면 자동 분석</p></div>
+    <div class="feature-card"><div class="icon">📐</div><h3>20+ 변수</h3><p>대칭성·관절각도·체형</p></div>
+    <div class="feature-card"><div class="icon">🏥</div><h3>임상 해석</h3><p>위험요소 + 운동처방</p></div>
+    <div class="feature-card"><div class="icon">📊</div><h3>구글시트</h3><p>데이터 자동 저장</p></div>
+  </div>
+  <button class="btn btn-primary" onclick="goSetup()">체형분석 시작</button>
+</div>
+
+<!-- ═══════ SCREEN 2: SETUP ═══════ -->
+<div id="setupScreen" class="screen">
+  <div class="header">
+    <button class="btn btn-sm btn-secondary" onclick="goHome()">← 뒤로</button>
+    <h1>피검자 정보</h1>
+  </div>
+  <div class="form-section">
+    <div class="form-group">
+      <label>이름 / ID</label>
+      <input type="text" id="subjectName" placeholder="홍길동" value="">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>연령</label>
+        <input type="number" id="subjectAge" value="40" min="5" max="100">
+      </div>
+      <div class="form-group">
+        <label>성별</label>
+        <select id="subjectGender"><option value="M">남성</option><option value="F">여성</option></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>키 (cm) — 캘리브레이션용</label>
+      <input type="number" id="subjectHeight" value="170" min="100" max="220" step="0.1">
+      <div class="form-hint">MediaPipe 추정 키와 비교하여 모든 거리값을 보정합니다</div>
+    </div>
+
+    <div class="sheets-config">
+      <label>📊 Google Apps Script URL (선택)</label>
+      <input type="url" id="sheetsUrl" placeholder="https://script.google.com/macros/s/...../exec">
+      <div class="form-hint">설정하면 결과가 구글시트에 자동 저장됩니다</div>
+      <div id="sheetsStatus" class="sheets-status"></div>
+    </div>
+
+    <button class="btn btn-primary" onclick="goCamera()" style="margin-top:16px">캘리브레이션 & 촬영 시작</button>
+    <div class="form-hint" style="text-align:center;margin-top:8px">① 캘리브레이션 → ② 앞면 → ③ 옆면 → ④ 뒷면</div>
+  </div>
+</div>
+
+<!-- ═══════ SCREEN 3: CAMERA ═══════ -->
+<div id="cameraScreen" class="screen">
+  <div class="camera-container">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="camera-overlay">
+      <div class="camera-top">
+        <button class="btn btn-sm btn-secondary" onclick="exitCamera()">✕ 닫기</button>
+        <div id="phaseBadge" class="phase-badge phase-cal">① 캘리브레이션</div>
+      </div>
+      <div class="camera-bottom">
+        <!-- Dynamic content injected by JS -->
+        <div id="cameraStatusArea"></div>
+        <div id="cameraControlArea"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ SCREEN 4: RESULTS ═══════ -->
+<div id="resultsScreen" class="screen">
+  <div class="header">
+    <h1>📋 분석 결과</h1>
+  </div>
+  <div class="results-scroll" id="resultsContent">
+    <!-- Populated by JS -->
+  </div>
+  <div class="bottom-actions">
+    <button class="btn btn-sm btn-secondary" onclick="goHome()">홈으로</button>
+    <button class="btn btn-sm btn-success" onclick="exportPDF()">📄 PDF 내보내기</button>
+    <button class="btn btn-sm btn-primary" onclick="saveToSheets()">📊 시트 저장</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script type="module">
+// ═══════════════════════════════════════
+// MediaPipe Pose Setup
+// ═══════════════════════════════════════
+import { PoseLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+let poseLandmarker = null;
+let video, canvas, ctx;
+let isRunning = false;
+let drawingUtils;
+
+// Landmark indices
+const LM = {
+  NOSE:0, L_EAR:7, R_EAR:8, L_SHOULDER:11, R_SHOULDER:12,
+  L_ELBOW:13, R_ELBOW:14, L_WRIST:15, R_WRIST:16,
+  L_HIP:23, R_HIP:24, L_KNEE:25, R_KNEE:26,
+  L_ANKLE:27, R_ANKLE:28, L_HEEL:29, R_HEEL:30,
+  L_FOOT:31, R_FOOT:32
+};
+
+// ═══════════════════════════════════════
+// App State
+// ═══════════════════════════════════════
+const state = {
+  subject: { name:'', age:40, gender:'M', heightCm:170 },
+  sheetsUrl: '',
+  phase: 'calibration', // calibration, anterior, lateral, posterior, done
+  isRecording: false,
+  recordStart: 0,
+  recordDuration: 3000,
+  recordFrames: [],
+  isCalibrated: false,
+  scaleFactor: 1.0,
+  arkitRawHeight: 0,
+  liveHeight: 0,
+  isBodyDetected: false,
+  captures: { anterior:null, lateral:null, posterior:null },
+  results: null,
+  currentLandmarks3D: null,
+};
+
+// ═══════════════════════════════════════
+// Navigation
+// ═══════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+window.goHome = () => { stopCamera(); showScreen('homeScreen'); };
+window.goSetup = () => showScreen('setupScreen');
+
+window.goCamera = async () => {
+  state.subject.name = document.getElementById('subjectName').value || '미입력';
+  state.subject.age = parseInt(document.getElementById('subjectAge').value) || 40;
+  state.subject.gender = document.getElementById('subjectGender').value;
+  state.subject.heightCm = parseFloat(document.getElementById('subjectHeight').value) || 170;
+  state.sheetsUrl = document.getElementById('sheetsUrl').value.trim();
+  
+  state.phase = 'calibration';
+  state.isCalibrated = false;
+  state.captures = { anterior:null, lateral:null, posterior:null };
+  state.results = null;
+  
+  showScreen('cameraScreen');
+  await startCamera();
+};
+
+window.exitCamera = () => { stopCamera(); showScreen('setupScreen'); };
+
+// ═══════════════════════════════════════
+// Camera & MediaPipe
+// ═══════════════════════════════════════
+async function startCamera() {
+  video = document.getElementById('video');
+  canvas = document.getElementById('canvas');
+  ctx = canvas.getContext('2d');
+  
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode:'environment', width:{ideal:1280}, height:{ideal:720} }
+    });
+    video.srcObject = stream;
+    await video.play();
+    
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    
+    if (!poseLandmarker) {
+      const filesetResolver = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+      );
+      poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.5,
+        minPosePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+      drawingUtils = new DrawingUtils(ctx);
+    }
+    
+    isRunning = true;
+    detectFrame();
+  } catch(e) {
+    console.error(e);
+    toast('카메라 접근 실패: ' + e.message, 'error');
+  }
+}
+
+function stopCamera() {
+  isRunning = false;
+  if (video && video.srcObject) {
+    video.srcObject.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+  }
+}
+
+function detectFrame() {
+  if (!isRunning || !poseLandmarker || !video || video.readyState < 2) {
+    if (isRunning) requestAnimationFrame(detectFrame);
+    return;
+  }
+  
+  const now = performance.now();
+  const result = poseLandmarker.detectForVideo(video, now);
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  if (result.landmarks && result.landmarks.length > 0) {
+    const lm = result.landmarks[0];
+    const wlm = result.worldLandmarks ? result.worldLandmarks[0] : null;
+    
+    state.isBodyDetected = true;
+    state.currentLandmarks3D = wlm;
+    
+    // Draw skeleton
+    const color = state.isRecording ? '#ef4444' : '#10b981';
+    drawSkeleton(lm, color);
+    
+    // Live height from world landmarks
+    if (wlm) {
+      const h = computeHeight(wlm);
+      if (h > 0.3) state.liveHeight = h * 100; // meters → cm
+    }
+    
+    // Recording
+    if (state.isRecording && wlm) {
+      state.recordFrames.push(JSON.parse(JSON.stringify(wlm)));
+      const elapsed = now - state.recordStart;
+      const prog = Math.min(elapsed / state.recordDuration, 1.0);
+      updateRecordingUI(prog, state.recordDuration - elapsed);
+      if (elapsed >= state.recordDuration) finishRecord();
+    }
+  } else {
+    state.isBodyDetected = false;
+    state.currentLandmarks3D = null;
+  }
+  
+  updateCameraUI();
+  requestAnimationFrame(detectFrame);
+}
+
+function drawSkeleton(landmarks, color) {
+  const connections = [
+    [11,12],[11,13],[13,15],[12,14],[14,16],
+    [11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],
+    [27,29],[27,31],[28,30],[28,32]
+  ];
+  
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  for (const [a,b] of connections) {
+    const la = landmarks[a], lb = landmarks[b];
+    if (la.visibility > 0.3 && lb.visibility > 0.3) {
+      ctx.beginPath();
+      ctx.moveTo(la.x * canvas.width, la.y * canvas.height);
+      ctx.lineTo(lb.x * canvas.width, lb.y * canvas.height);
+      ctx.stroke();
+    }
+  }
+  
+  ctx.fillStyle = color;
+  for (const lm of landmarks) {
+    if (lm.visibility > 0.3) {
+      ctx.beginPath();
+      ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3;
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+// Height Computation
+// ═══════════════════════════════════════
+function computeHeight(wlm) {
+  const head = wlm[0]; // nose as top
+  const lf = wlm[LM.L_FOOT], rf = wlm[LM.R_FOOT];
+  const lh = wlm[LM.L_HEEL], rh = wlm[LM.R_HEEL];
+  if (!head || !lf || !rf) return 0;
+  const lowest = Math.min(lf.y, rf.y, lh.y, rh.y);
+  return Math.abs(head.y - lowest);
+}
+
+// ═══════════════════════════════════════
+// Recording & Phases
+// ═══════════════════════════════════════
+window.startRecord = () => {
+  if (!state.isBodyDetected) return;
+  state.isRecording = true;
+  state.recordFrames = [];
+  state.recordDuration = state.phase === 'calibration' ? 3000 : 4000;
+  state.recordStart = performance.now();
+};
+
+function finishRecord() {
+  state.isRecording = false;
+  if (state.recordFrames.length === 0) return;
+  
+  const averaged = averageFrames(state.recordFrames);
+  
+  switch (state.phase) {
+    case 'calibration': {
+      const rawH = computeHeight(averaged) * 100;
+      state.arkitRawHeight = rawH;
+      state.scaleFactor = (rawH > 10 && state.subject.heightCm > 10) ? state.subject.heightCm / rawH : 1.0;
+      state.isCalibrated = true;
+      state.phase = 'anterior';
+      break;
+    }
+    case 'anterior':
+      state.captures.anterior = averaged;
+      state.phase = 'lateral';
+      break;
+    case 'lateral':
+      state.captures.lateral = averaged;
+      state.phase = 'posterior';
+      break;
+    case 'posterior':
+      state.captures.posterior = averaged;
+      state.phase = 'done';
+      computeResults();
+      break;
+  }
+}
+
+function averageFrames(frames) {
+  if (frames.length === 0) return null;
+  const count = frames.length;
+  const avg = frames[0].map((lm, i) => {
+    let sx = 0, sy = 0, sz = 0;
+    for (const f of frames) {
+      sx += f[i].x; sy += f[i].y; sz += f[i].z;
+    }
+    return { x: sx/count, y: sy/count, z: sz/count, visibility: lm.visibility };
+  });
+  return avg;
+}
+
+// ═══════════════════════════════════════
+// Camera UI Updates
+// ═══════════════════════════════════════
+function updateCameraUI() {
+  const badge = document.getElementById('phaseBadge');
+  const phaseNames = {
+    calibration: ['① 캘리브레이션', 'phase-cal'],
+    anterior: ['② 앞면 (Anterior)', 'phase-ant'],
+    lateral: ['③ 옆면 (Lateral)', 'phase-lat'],
+    posterior: ['④ 뒷면 (Posterior)', 'phase-pos'],
+    done: ['✅ 완료', 'phase-done']
+  };
+  const [name, cls] = phaseNames[state.phase];
+  badge.textContent = name;
+  badge.className = 'phase-badge ' + cls;
+  
+  const statusArea = document.getElementById('cameraStatusArea');
+  const controlArea = document.getElementById('cameraControlArea');
+  
+  let statusHTML = '';
+  let controlHTML = '';
+  
+  // Scale factor badge
+  if (state.isCalibrated) {
+    statusHTML += `<div style="background:rgba(0,0,0,0.5);padding:4px 12px;border-radius:20px;font-size:11px;color:#10b981">✅ 보정 ×${state.scaleFactor.toFixed(3)}</div>`;
+  }
+  
+  // Capture dots
+  if (state.isCalibrated) {
+    statusHTML += `<div class="capture-dots">
+      <div class="cap-dot"><div class="circle ${state.captures.anterior?'done':''}"></div><div class="txt">앞</div></div>
+      <div class="cap-dot"><div class="circle ${state.captures.lateral?'done':''}"></div><div class="txt">옆</div></div>
+      <div class="cap-dot"><div class="circle ${state.captures.posterior?'done':''}"></div><div class="txt">뒤</div></div>
+    </div>`;
+  }
+  
+  // Live height (calibration)
+  if (state.phase === 'calibration' && !state.isCalibrated && state.isBodyDetected) {
+    statusHTML += `<div class="live-height">
+      <div class="col"><div class="label">입력 키</div><div class="val">${state.subject.heightCm.toFixed(0)}cm</div></div>
+      <div class="col" style="color:rgba(255,255,255,0.3)">vs</div>
+      <div class="col"><div class="label">MediaPipe 감지</div><div class="val cyan">${state.liveHeight > 10 ? state.liveHeight.toFixed(0)+'cm' : '--'}</div></div>
+    </div>`;
+  }
+  
+  // Tracking badge
+  statusHTML += `<div class="tracking-badge ${state.isBodyDetected ? 'tracking-on' : 'tracking-off'}">
+    <span style="width:8px;height:8px;border-radius:50%;background:currentColor"></span>
+    ${state.isBodyDetected ? '사람 감지됨' : '전신이 보이게 서세요'}
+  </div>`;
+  
+  // Control area
+  if (state.isRecording) {
+    controlHTML = `<div id="countdownText" class="countdown">...</div>
+      <div class="progress-bar"><div id="progressFill" class="progress-fill" style="width:0%"></div></div>
+      <div style="color:#fff;font-size:13px">가만히 서 계세요</div>
+      <button class="btn btn-sm btn-danger" onclick="cancelRecord()">취소</button>`;
+  } else if (state.phase === 'done') {
+    controlHTML = `<div style="text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">✅</div>
+      <div style="color:#fff;font-size:18px;font-weight:700;margin-bottom:12px">3방향 촬영 완료!</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-sm btn-secondary" onclick="resetCaptures()">재촬영</button>
+        <button class="btn btn-sm btn-success" onclick="showResults()">결과 보기 →</button>
+      </div>
+    </div>`;
+  } else {
+    const labels = { calibration:'캘리브레이션 (3초)', anterior:'앞면 촬영 (4초)', lateral:'옆면 촬영 (4초)', posterior:'뒷면 촬영 (4초)' };
+    const instructions = { calibration:'전신이 보이게 자연스럽게 서세요', anterior:'피검자의 정면을 촬영하세요', lateral:'피검자의 측면을 촬영하세요', posterior:'피검자의 후면을 촬영하세요' };
+    controlHTML = `<div style="color:#fff;font-size:14px;margin-bottom:8px">${instructions[state.phase]}</div>
+      <button class="capture-btn" onclick="startRecord()" ${state.isBodyDetected ? '' : 'disabled'}>📷</button>
+      <div style="color:rgba(255,255,255,0.5);font-size:11px">${labels[state.phase]}</div>`;
+  }
+  
+  statusArea.innerHTML = statusHTML;
+  controlArea.innerHTML = controlHTML;
+}
+
+function updateRecordingUI(progress, remaining) {
+  const cd = document.getElementById('countdownText');
+  const pf = document.getElementById('progressFill');
+  if (cd) cd.textContent = Math.max(0, Math.ceil(remaining / 1000));
+  if (pf) pf.style.width = (progress * 100) + '%';
+}
+
+window.cancelRecord = () => { state.isRecording = false; state.recordFrames = []; };
+window.resetCaptures = () => {
+  state.captures = { anterior:null, lateral:null, posterior:null };
+  state.phase = 'anterior';
+};
+window.showResults = () => { stopCamera(); renderResults(); showScreen('resultsScreen'); };
+
+// ═══════════════════════════════════════
+// Compute Results
+// ═══════════════════════════════════════
+function computeResults() {
+  const sf = state.scaleFactor;
+  const ant = state.captures.anterior;
+  const lat = state.captures.lateral;
+  const post = state.captures.posterior;
+  const primary = ant || lat || post;
+  if (!primary) return;
+  
+  const r = {
+    subject: { ...state.subject },
+    scaleFactor: sf,
+    date: new Date().toISOString(),
+    symmetry: {},
+    angles: {},
+    sizes: {},
+    scores: {},
+    findings: [],
+    exercises: []
+  };
+  
+  // Helper functions
+  const dist3D = (a, b) => Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2 + (a.z-b.z)**2);
+  const toCm = (m) => m * 100 * sf;
+  const angle3D = (a, v, c) => {
+    const v1 = { x:a.x-v.x, y:a.y-v.y, z:a.z-v.z };
+    const v2 = { x:c.x-v.x, y:c.y-v.y, z:c.z-v.z };
+    const dot = v1.x*v2.x + v1.y*v2.y + v1.z*v2.z;
+    const l1 = Math.sqrt(v1.x**2+v1.y**2+v1.z**2);
+    const l2 = Math.sqrt(v2.x**2+v2.y**2+v2.z**2);
+    if (l1 < 0.001 || l2 < 0.001) return 180;
+    return Math.acos(Math.max(-1, Math.min(1, dot/(l1*l2)))) * 180 / Math.PI;
+  };
+  
+  // === SYMMETRY (from anterior) ===
+  const src = ant || primary;
+  const ls = src[LM.L_SHOULDER], rs = src[LM.R_SHOULDER];
+  const lh = src[LM.L_HIP], rh = src[LM.R_HIP];
+  const lk = src[LM.L_KNEE], rk = src[LM.R_KNEE];
+  
+  // Shoulder
+  const sDy = (ls.y - rs.y);
+  r.symmetry.shoulderHeightDiff = Math.abs(toCm(sDy));
+  r.symmetry.shoulderHigherSide = sDy > 0.003 ? '우측 높음' : (sDy < -0.003 ? '좌측 높음' : '대칭');
+  // Note: MediaPipe Y is inverted (top=0), so positive sDy means LEFT is lower, RIGHT is higher
+  const sDx = Math.abs(rs.x - ls.x);
+  r.symmetry.shoulderTiltAngle = sDx > 0.001 ? Math.abs(Math.atan2(Math.abs(sDy), sDx) * 180 / Math.PI) : 0;
+  
+  // Pelvis
+  const pDy = (lh.y - rh.y);
+  r.symmetry.pelvicHeightDiff = Math.abs(toCm(pDy));
+  r.symmetry.pelvisHigherSide = pDy > 0.003 ? '우측 높음' : (pDy < -0.003 ? '좌측 높음' : '대칭');
+  const pDx = Math.abs(rh.x - lh.x);
+  r.symmetry.pelvicTiltAngle = pDx > 0.001 ? Math.abs(Math.atan2(Math.abs(pDy), pDx) * 180 / Math.PI) : 0;
+  
+  // Knee
+  const kDy = (lk.y - rk.y);
+  r.symmetry.kneeHeightDiff = Math.abs(toCm(kDy));
+  r.symmetry.kneeHigherSide = kDy > 0.003 ? '우측 높음' : (kDy < -0.003 ? '좌측 높음' : '대칭');
+  
+  // Trunk shift
+  const sMidX = (ls.x + rs.x) / 2;
+  const hMidX = (lh.x + rh.x) / 2;
+  const shift = sMidX - hMidX;
+  r.symmetry.trunkShift = Math.abs(toCm(shift));
+  r.symmetry.trunkShiftDir = shift > 0.005 ? '우측 편위' : (shift < -0.005 ? '좌측 편위' : '중립');
+  
+  // Leg lengths
+  const la = src[LM.L_ANKLE], ra = src[LM.R_ANKLE];
+  r.symmetry.leftLegLength = toCm(dist3D(lh, lk) + dist3D(lk, la));
+  r.symmetry.rightLegLength = toCm(dist3D(rh, rk) + dist3D(rk, ra));
+  r.symmetry.legLengthDiff = Math.abs(r.symmetry.leftLegLength - r.symmetry.rightLegLength);
+  
+  // Arm lengths
+  const le = src[LM.L_ELBOW], re = src[LM.R_ELBOW];
+  const lw = src[LM.L_WRIST], rw = src[LM.R_WRIST];
+  r.symmetry.leftArmLength = toCm(dist3D(ls, le) + dist3D(le, lw));
+  r.symmetry.rightArmLength = toCm(dist3D(rs, re) + dist3D(re, rw));
+  r.symmetry.armLengthDiff = Math.abs(r.symmetry.leftArmLength - r.symmetry.rightArmLength);
+  
+  // === ANGLES (from lateral) ===
+  const asrc = lat || primary;
+  r.angles.leftKneeAngle = angle3D(asrc[LM.L_HIP], asrc[LM.L_KNEE], asrc[LM.L_ANKLE]);
+  r.angles.rightKneeAngle = angle3D(asrc[LM.R_HIP], asrc[LM.R_KNEE], asrc[LM.R_ANKLE]);
+  r.angles.leftHipFlexion = angle3D(asrc[LM.L_SHOULDER], asrc[LM.L_HIP], asrc[LM.L_KNEE]);
+  r.angles.rightHipFlexion = angle3D(asrc[LM.R_SHOULDER], asrc[LM.R_HIP], asrc[LM.R_KNEE]);
+  
+  // FHP (CVA): ear → shoulder angle
+  const ear = asrc[LM.L_EAR].visibility > asrc[LM.R_EAR].visibility ? asrc[LM.L_EAR] : asrc[LM.R_EAR];
+  const shoulder = asrc[LM.L_SHOULDER].visibility > asrc[LM.R_SHOULDER].visibility ? asrc[LM.L_SHOULDER] : asrc[LM.R_SHOULDER];
+  const dz = Math.abs(ear.z - shoulder.z);
+  const dy = Math.abs(ear.y - shoulder.y);
+  r.angles.forwardHeadAngle = (dz > 0.001 || dy > 0.001) ? Math.abs(Math.atan2(dy, dz) * 180 / Math.PI) : 50;
+  
+  // Approximate thoracic kyphosis and lumbar lordosis from Z-depth differences
+  const midSpine = { x:(ls.x+rs.x)/2, y:(ls.y+rs.y)/2, z:(ls.z+rs.z)/2 };
+  const midHip = { x:(lh.x+rh.x)/2, y:(lh.y+rh.y)/2, z:(lh.z+rh.z)/2 };
+  r.angles.thoracicKyphosis = angle3D(asrc[LM.NOSE], midSpine, midHip);
+  r.angles.thoracicKyphosis = Math.max(0, 180 - r.angles.thoracicKyphosis);
+  r.angles.lumbarLordosis = angle3D(midSpine, midHip, asrc[LM.L_KNEE]);
+  r.angles.lumbarLordosis = Math.max(0, 180 - r.angles.lumbarLordosis);
+  
+  // === SIZES ===
+  r.sizes.height = state.subject.heightCm;
+  r.sizes.shoulderWidth = toCm(dist3D(ls, rs));
+  r.sizes.pelvicWidth = toCm(dist3D(lh, rh));
+  
+  // === SCORING ===
+  const scoreThreshold = (val, ok, warn) => {
+    const v = Math.abs(val);
+    if (v <= ok) return 100;
+    if (v <= warn) return Math.max(0, 100 - ((v-ok)/(warn-ok))*40);
+    return Math.max(0, 60 - ((v-warn)/Math.max(warn,0.01))*60);
+  };
+  const angleScore = (val, ideal, ok, warn) => scoreThreshold(Math.abs(val - ideal), ok, warn);
+  
+  const symScores = [
+    scoreThreshold(r.symmetry.shoulderHeightDiff, 1.5, 4),
+    scoreThreshold(r.symmetry.shoulderTiltAngle, 2, 5),
+    scoreThreshold(r.symmetry.pelvicHeightDiff, 1, 3),
+    scoreThreshold(r.symmetry.pelvicTiltAngle, 2, 5),
+    scoreThreshold(r.symmetry.kneeHeightDiff, 1, 2),
+    scoreThreshold(r.symmetry.trunkShift, 2, 3),
+    scoreThreshold(r.symmetry.legLengthDiff, 1, 2),
+    scoreThreshold(r.symmetry.armLengthDiff, 1.5, 3)
+  ];
+  r.scores.symmetry = symScores.reduce((a,b)=>a+b,0) / symScores.length;
+  
+  const alignScores = [
+    angleScore(r.angles.forwardHeadAngle, 52, 8, 15),
+    angleScore(r.angles.thoracicKyphosis, 33, 12, 20),
+    angleScore(r.angles.lumbarLordosis, 40, 10, 18)
+  ];
+  r.scores.alignment = alignScores.reduce((a,b)=>a+b,0) / alignScores.length;
+  
+  const jointScores = [
+    angleScore(r.angles.leftKneeAngle, 178, 5, 10),
+    angleScore(r.angles.rightKneeAngle, 178, 5, 10),
+    angleScore(r.angles.leftHipFlexion, 178, 5, 12),
+    angleScore(r.angles.rightHipFlexion, 178, 5, 12)
+  ];
+  r.scores.jointAngle = jointScores.reduce((a,b)=>a+b,0) / jointScores.length;
+  
+  r.scores.overall = r.scores.symmetry * 0.4 + r.scores.alignment * 0.3 + r.scores.jointAngle * 0.3;
+  
+  if (r.scores.overall >= 90) { r.scores.grade = '매우 우수'; r.scores.gradeColor = 'green'; }
+  else if (r.scores.overall >= 80) { r.scores.grade = '우수'; r.scores.gradeColor = 'blue'; }
+  else if (r.scores.overall >= 70) { r.scores.grade = '정상'; r.scores.gradeColor = 'teal'; }
+  else if (r.scores.overall >= 60) { r.scores.grade = '주의'; r.scores.gradeColor = 'orange'; }
+  else { r.scores.grade = '관리 필요'; r.scores.gradeColor = 'red'; }
+  
+  // === CLINICAL FINDINGS & EXERCISES ===
+  generateFindings(r);
+  
+  state.results = r;
+}
+
+function generateFindings(r) {
+  const s = r.symmetry, a = r.angles;
+  
+  if (s.shoulderHeightDiff > 2) {
+    const severe = s.shoulderHeightDiff > 4;
+    r.findings.push({
+      severity: severe ? 2 : 1,
+      condition: severe ? '현저한 어깨 비대칭' : '어깨 비대칭',
+      detail: `어깨 높이 차이 ${s.shoulderHeightDiff.toFixed(1)}cm (${s.shoulderHigherSide})`,
+      risk: severe ? '구조적 척추측만 감별 필요, 흉곽출구증후군 위험' : '기능적 척추측만, 승모근 불균형, 경부통 유발 가능'
+    });
+    r.exercises.push({
+      title: '어깨 비대칭 교정',
+      items: [
+        { cat:'근력', name:'약측 승모근 중/하부 강화 (Y-raise, 페이스풀)', freq:'주 3회', sets:'12-15회 × 3세트', note:'저항밴드 중강도' },
+        { cat:'스트레칭', name:'강측 상부승모근/견갑거근 스트레칭', freq:'매일', sets:'30초 × 3회', note:'통증 없는 범위' },
+        { cat:'자세교정', name:'흉추 신전 운동, 벽 천사(Wall Angel)', freq:'주 5회', sets:'10-12회 × 3세트', note:'견갑골 후인하강' }
+      ]
+    });
+  }
+  
+  if (s.pelvicHeightDiff > 1.5) {
+    const severe = s.pelvicHeightDiff > 3;
+    r.findings.push({
+      severity: severe ? 2 : 1,
+      condition: severe ? '현저한 골반 비대칭' : '골반 비대칭',
+      detail: `골반 높이 차이 ${s.pelvicHeightDiff.toFixed(1)}cm`,
+      risk: severe ? '구조적 하지길이 차이, 고관절 골관절염 위험' : '기능적 하지길이 차이, 천장관절 이상, 요통 유발'
+    });
+    r.exercises.push({
+      title: '골반 비대칭 교정',
+      items: [
+        { cat:'근력', name:'약측 중둔근 강화 (사이드레이즈, 클램쉘)', freq:'주 3회', sets:'12-15회 × 3세트', note:'미니밴드 저항' },
+        { cat:'스트레칭', name:'강측 장요근/이상근 스트레칭', freq:'매일', sets:'30초 × 3회', note:'골반 중립 유지' },
+        { cat:'교정운동', name:'골반 레벨링, 브릿지 변형', freq:'주 4-5회', sets:'10-12회 × 3세트', note:'골반 수평 유지' }
+      ]
+    });
+  }
+  
+  if (a.leftKneeAngle < 170 || a.rightKneeAngle < 170) {
+    r.findings.push({
+      severity: 1, condition: '무릎 굴곡 구축',
+      detail: `무릎 각도 좌 ${a.leftKneeAngle.toFixed(0)}° / 우 ${a.rightKneeAngle.toFixed(0)}°`,
+      risk: '슬관절 골관절염 위험↑, 대퇴사두근 과부하, 보행 효율↓'
+    });
+    r.exercises.push({
+      title: '무릎 굴곡 구축 교정',
+      items: [
+        { cat:'ROM', name:'슬관절 신전 ROM 운동', freq:'매일', sets:'15-20회 × 3세트', note:'점진적 신전 범위 증가' },
+        { cat:'근력', name:'대퇴사두근 강화 (미니스쿼트)', freq:'주 3회', sets:'10-15회 × 3세트', note:'1RM 50-70%' },
+        { cat:'스트레칭', name:'햄스트링 스트레칭', freq:'매일', sets:'30초 × 3회', note:'슬관절 완전 신전 위치' }
+      ]
+    });
+  }
+  
+  if (a.forwardHeadAngle < 40) {
+    const severe = a.forwardHeadAngle < 30;
+    r.findings.push({
+      severity: severe ? 2 : 1,
+      condition: severe ? '심한 전방두부자세' : '거북목 (전방두부자세)',
+      detail: `CVA ${a.forwardHeadAngle.toFixed(1)}° (정상: > 50°)`,
+      risk: severe ? '경추 퇴행 가속, 신경근병증 위험' : '경추 추간판 압력↑, 두통, 상부교차증후군'
+    });
+    r.exercises.push({
+      title: '전방두부자세(FHP) 교정',
+      items: [
+        { cat:'근력', name:'심부 경추 굴곡근 강화 (Chin Tuck)', freq:'주 5회', sets:'10초 유지 × 10회', note:'표면 굴곡근 대상 방지' },
+        { cat:'스트레칭', name:'흉쇄유돌근/후두하근 스트레칭', freq:'매일', sets:'30초 × 3회', note:'어지러움 시 중단' },
+        { cat:'자세교정', name:'모니터 높이 조정, 1시간마다 경추 ROM', freq:'매일', sets:'-', note:'생활습관 교정' }
+      ]
+    });
+  }
+  
+  if (a.thoracicKyphosis > 50) {
+    r.findings.push({
+      severity: a.thoracicKyphosis > 60 ? 2 : 1,
+      condition: '과도한 흉추 후만',
+      detail: `흉추 후만 ${a.thoracicKyphosis.toFixed(1)}° (정상: 20-45°)`,
+      risk: '호흡기능↓, 견관절 충돌증후군, 낙상위험↑'
+    });
+    r.exercises.push({
+      title: '흉추 과후만 교정',
+      items: [
+        { cat:'근력', name:'흉추 신전근 강화 (수퍼맨, Y/T/W)', freq:'주 3회', sets:'8-10회 × 3세트', note:'경추 과신전 방지' },
+        { cat:'가동성', name:'폼롤러 흉추 신전, 캣카멜', freq:'매일', sets:'10회씩', note:'요추 과가동성 주의' },
+        { cat:'호흡', name:'횡격막 호흡 훈련', freq:'매일', sets:'5분, 8-10호흡 × 3세트', note:'4초 흡기-7초 호기' }
+      ]
+    });
+  }
+  
+  if (s.trunkShift > 3) {
+    r.findings.push({
+      severity: 1, condition: '체간 측방 편위',
+      detail: `체간 편위 ${s.trunkShift.toFixed(1)}cm (${s.trunkShiftDir})`,
+      risk: '척추측만, 코어 근력 비대칭, 균형장애'
+    });
+  }
+  
+  if (s.legLengthDiff > 2) {
+    r.findings.push({
+      severity: 1, condition: '하지길이 부동',
+      detail: `다리 길이 차이 ${s.legLengthDiff.toFixed(1)}cm`,
+      risk: '보행 비대칭, 골반 경사, 요통'
+    });
+  }
+  
+  if (r.scores.symmetry < 60 && r.scores.alignment < 60) {
+    r.findings.push({
+      severity: 2, condition: '복합 자세 이상',
+      detail: `대칭성 ${r.scores.symmetry.toFixed(0)} + 정렬 ${r.scores.alignment.toFixed(0)} (둘 다 60 미만)`,
+      risk: '근골격계 만성통증 위험↑, 다면적 자세교정 필요'
+    });
+    r.exercises.push({
+      title: '복합 자세 이상 종합 교정',
+      items: [
+        { cat:'코어안정화', name:'플랭크, 데드버그, 버드독', freq:'주 4-5회', sets:'8-10회 × 3세트', note:'기본 안정화부터' },
+        { cat:'전문의뢰', name:'필라테스/교정운동 전문가 의뢰 권장', freq:'-', sets:'-', note:'3개월 후 재평가' }
+      ]
+    });
+  }
+}
+
+// ═══════════════════════════════════════
+// Render Results
+// ═══════════════════════════════════════
+function renderResults() {
+  const r = state.results;
+  if (!r) return;
+  
+  const scoreColor = r.scores.gradeColor;
+  const statusClass = (val, ok, warn) => {
+    const v = Math.abs(val);
+    if (v <= ok) return ['dot-good','val-good'];
+    if (v <= warn) return ['dot-warn','val-warn'];
+    return ['dot-alert','val-alert'];
+  };
+  const angleStatusClass = (val, ideal, ok, warn) => statusClass(Math.abs(val-ideal), ok, warn);
+  
+  const mrow = (title, value, norm, dotCls, valCls) => `
+    <div class="mrow">
+      <div class="dot ${dotCls}"></div>
+      <div class="info"><div class="title">${title}</div><div class="norm">정상: ${norm}</div></div>
+      <div class="value ${valCls}">${value}</div>
+    </div>`;
+  
+  const df = new Intl.DateTimeFormat('ko', { year:'numeric', month:'2-digit', day:'2-digit' });
+  
+  let html = '';
+  
+  // Score hero
+  const circumference = 2 * Math.PI * 70;
+  const offset = circumference * (1 - r.scores.overall / 100);
+  html += `<div class="score-hero">
+    <div class="score-circle">
+      <svg width="160" height="160" viewBox="0 0 160 160">
+        <circle cx="80" cy="80" r="70" fill="none" stroke="var(--border)" stroke-width="12"/>
+        <circle cx="80" cy="80" r="70" fill="none" stroke="var(--${scoreColor === 'teal' ? 'accent2' : scoreColor})" stroke-width="12" 
+          stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round"/>
+      </svg>
+      <div class="score-text">
+        <div class="score-num" style="color:var(--${scoreColor === 'teal' ? 'accent2' : scoreColor})">${r.scores.overall.toFixed(0)}</div>
+        <div class="score-unit">/ 100</div>
+      </div>
+    </div>
+    <div class="grade-badge grade-${scoreColor}">${r.scores.grade}</div>
+    <div style="margin-top:12px;font-size:12px;color:var(--text3)">${r.subject.name} · ${r.subject.age}세 · ${r.subject.gender==='M'?'남성':'여성'} · ${r.subject.heightCm}cm · ${df.format(new Date(r.date))}</div>
+  </div>`;
+  
+  // Sub-scores
+  const subColor = (s) => s >= 90 ? 'var(--good)' : s >= 80 ? 'var(--accent)' : s >= 70 ? 'var(--accent2)' : s >= 60 ? 'var(--warn)' : 'var(--alert)';
+  html += `<div class="sub-scores">
+    <div class="sub-score-card"><div class="val" style="color:${subColor(r.scores.symmetry)}">${r.scores.symmetry.toFixed(0)}</div><div class="lb">대칭성 (40%)</div></div>
+    <div class="sub-score-card"><div class="val" style="color:${subColor(r.scores.alignment)}">${r.scores.alignment.toFixed(0)}</div><div class="lb">전후정렬 (30%)</div></div>
+    <div class="sub-score-card"><div class="val" style="color:${subColor(r.scores.jointAngle)}">${r.scores.jointAngle.toFixed(0)}</div><div class="lb">관절각도 (30%)</div></div>
+  </div>`;
+  
+  // Symmetry section
+  const s = r.symmetry;
+  html += buildSection('↔️', '대칭성 분석', [
+    mrow('어깨 높이 차이', `${s.shoulderHeightDiff.toFixed(1)} cm`, '< 1.5 cm', ...statusClass(s.shoulderHeightDiff, 1.5, 4)),
+    mrow('어깨 기울기', `${s.shoulderTiltAngle.toFixed(1)}°`, '< 2.0°', ...statusClass(s.shoulderTiltAngle, 2, 5)),
+    mrow('골반 높이 차이', `${s.pelvicHeightDiff.toFixed(1)} cm`, '< 1.0 cm', ...statusClass(s.pelvicHeightDiff, 1, 3)),
+    mrow('골반 기울기', `${s.pelvicTiltAngle.toFixed(1)}°`, '< 2.0°', ...statusClass(s.pelvicTiltAngle, 2, 5)),
+    mrow('무릎 높이 차이', `${s.kneeHeightDiff.toFixed(1)} cm`, '< 1.0 cm', ...statusClass(s.kneeHeightDiff, 1, 2)),
+    mrow('체간 편위', `${s.trunkShift.toFixed(1)} cm`, '< 2.0 cm', ...statusClass(s.trunkShift, 2, 3)),
+    mrow('다리 길이 차이', `${s.legLengthDiff.toFixed(1)} cm`, '< 1.0 cm', ...statusClass(s.legLengthDiff, 1, 2)),
+    mrow('팔 길이 차이', `${s.armLengthDiff.toFixed(1)} cm`, '< 1.5 cm', ...statusClass(s.armLengthDiff, 1.5, 3)),
+  ].join(''), true);
+  
+  // Angles section
+  const a = r.angles;
+  html += buildSection('📐', '관절 각도 분석', [
+    mrow('좌측 무릎', `${a.leftKneeAngle.toFixed(1)}°`, '175-180°', ...angleStatusClass(a.leftKneeAngle, 178, 5, 10)),
+    mrow('우측 무릎', `${a.rightKneeAngle.toFixed(1)}°`, '175-180°', ...angleStatusClass(a.rightKneeAngle, 178, 5, 10)),
+    mrow('좌측 고관절', `${a.leftHipFlexion.toFixed(1)}°`, '175-180°', ...angleStatusClass(a.leftHipFlexion, 178, 5, 12)),
+    mrow('우측 고관절', `${a.rightHipFlexion.toFixed(1)}°`, '175-180°', ...angleStatusClass(a.rightHipFlexion, 178, 5, 12)),
+    mrow('경추전방전위(CVA)', `${a.forwardHeadAngle.toFixed(1)}°`, '> 50°', ...angleStatusClass(a.forwardHeadAngle, 52, 8, 15)),
+    mrow('흉추 후만', `${a.thoracicKyphosis.toFixed(1)}°`, '20-45°', ...angleStatusClass(a.thoracicKyphosis, 33, 12, 20)),
+    mrow('요추 전만', `${a.lumbarLordosis.toFixed(1)}°`, '30-50°', ...angleStatusClass(a.lumbarLordosis, 40, 10, 18)),
+  ].join(''));
+  
+  // Sizes section
+  html += buildSection('📏', '크기 측정', [
+    mrow('신장', `${r.sizes.height.toFixed(1)} cm`, '-', 'dot-normal', 'val-normal'),
+    mrow('어깨 너비', `${r.sizes.shoulderWidth.toFixed(1)} cm`, '-', 'dot-normal', 'val-normal'),
+    mrow('골반 너비', `${r.sizes.pelvicWidth.toFixed(1)} cm`, '-', 'dot-normal', 'val-normal'),
+    mrow('좌측 다리', `${s.leftLegLength.toFixed(1)} cm`, '-', 'dot-normal', 'val-normal'),
+    mrow('우측 다리', `${s.rightLegLength.toFixed(1)} cm`, '-', 'dot-normal', 'val-normal'),
+  ].join(''));
+  
+  // Clinical findings
+  if (r.findings.length > 0) {
+    let fHtml = r.findings.map(f => `
+      <div class="finding-card ${f.severity >= 2 ? 'finding-alert' : 'finding-warn'}">
+        <div class="sev">${f.severity >= 2 ? '🚨 경고' : '⚠️ 주의'}</div>
+        <div class="cond">${f.condition}</div>
+        <div class="detail">${f.detail}</div>
+        <div class="risk">${f.risk}</div>
+      </div>`).join('');
+    html += buildSection('🏥', '임상 소견 & 위험요소', fHtml, true);
+  }
+  
+  // Exercise prescriptions
+  if (r.exercises.length > 0) {
+    let eHtml = r.exercises.map(group => `
+      <div class="ex-group">
+        <div class="ex-group-title">🏋️ ${group.title}</div>
+        ${group.items.map(ex => `
+          <div class="ex-item">
+            <span class="cat-badge cat-${ex.cat}">${ex.cat}</span>
+            <div class="name">${ex.name}</div>
+            <div class="meta">
+              ${ex.freq !== '-' ? `<span>📅 ${ex.freq}</span>` : ''}
+              ${ex.sets !== '-' ? `<span>🔄 ${ex.sets}</span>` : ''}
+            </div>
+            ${ex.note ? `<div class="note">💡 ${ex.note}</div>` : ''}
+          </div>`).join('')}
+      </div>`).join('');
+    html += buildSection('🏃', 'ACSM FITT 운동처방', eHtml, true);
+  }
+  
+  // Disclaimer
+  html += `<div class="disclaimer">⚠️ 본 결과는 MediaPipe Pose 기반 추정치이며 임상 진단을 대체하지 않습니다. 운동처방은 ACSM 가이드라인 기반 일반적 권고사항이며, 전문가와 상담 후 적용하세요.</div>`;
+  
+  document.getElementById('resultsContent').innerHTML = html;
+  
+  // Add toggle listeners
+  document.querySelectorAll('.section-head').forEach(el => {
+    el.addEventListener('click', () => {
+      el.classList.toggle('open');
+      el.nextElementSibling.classList.toggle('open');
+    });
+  });
+}
+
+function buildSection(icon, title, content, defaultOpen = false) {
+  return `<div class="section-card">
+    <div class="section-head ${defaultOpen ? 'open' : ''}">
+      <span class="icon">${icon}</span>
+      <h3>${title}</h3>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="section-body ${defaultOpen ? 'open' : ''}">${content}</div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════
+// Google Sheets Integration
+// ═══════════════════════════════════════
+window.saveToSheets = async () => {
+  const url = state.sheetsUrl || document.getElementById('sheetsUrl')?.value?.trim();
+  if (!url) { toast('Google Apps Script URL을 설정하세요', 'error'); return; }
+  
+  const r = state.results;
+  if (!r) { toast('결과 데이터가 없습니다', 'error'); return; }
+  
+  const data = {
+    timestamp: r.date,
+    name: r.subject.name,
+    age: r.subject.age,
+    gender: r.subject.gender === 'M' ? '남성' : '여성',
+    height: r.subject.heightCm,
+    scaleFactor: r.scaleFactor.toFixed(3),
+    overallScore: r.scores.overall.toFixed(1),
+    grade: r.scores.grade,
+    symmetryScore: r.scores.symmetry.toFixed(1),
+    alignmentScore: r.scores.alignment.toFixed(1),
+    jointAngleScore: r.scores.jointAngle.toFixed(1),
+    shoulderHeightDiff: r.symmetry.shoulderHeightDiff.toFixed(1),
+    shoulderTilt: r.symmetry.shoulderTiltAngle.toFixed(1),
+    pelvicHeightDiff: r.symmetry.pelvicHeightDiff.toFixed(1),
+    pelvicTilt: r.symmetry.pelvicTiltAngle.toFixed(1),
+    kneeHeightDiff: r.symmetry.kneeHeightDiff.toFixed(1),
+    trunkShift: r.symmetry.trunkShift.toFixed(1),
+    legLengthDiff: r.symmetry.legLengthDiff.toFixed(1),
+    leftKneeAngle: r.angles.leftKneeAngle.toFixed(1),
+    rightKneeAngle: r.angles.rightKneeAngle.toFixed(1),
+    forwardHeadAngle: r.angles.forwardHeadAngle.toFixed(1),
+    thoracicKyphosis: r.angles.thoracicKyphosis.toFixed(1),
+    lumbarLordosis: r.angles.lumbarLordosis.toFixed(1),
+    findings: r.findings.map(f => f.condition).join(', '),
+    exercises: r.exercises.map(e => e.title).join(', ')
+  };
+  
+  try {
+    toast('구글시트에 저장 중...', 'success');
+    await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    toast('✅ 구글시트에 저장되었습니다!', 'success');
+  } catch(e) {
+    toast('저장 실패: ' + e.message, 'error');
+  }
+};
+
+// ═══════════════════════════════════════
+// PDF Export
+// ═══════════════════════════════════════
+window.exportPDF = () => {
+  const r = state.results;
+  if (!r) return;
+  
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('p', 'mm', 'a4');
+  let y = 15;
+  const lm = 15, pw = 180;
+  
+  // Header
+  doc.setFillColor(24, 95, 165);
+  doc.rect(0, 0, 210, 30, 'F');
+  doc.setFillColor(34, 150, 110);
+  doc.rect(0, 30, 210, 2, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.text('체형분석 결과 보고서', lm, 14);
+  doc.setFontSize(9);
+  doc.text(`${r.subject.name} · ${r.subject.age}세 · ${r.subject.gender==='M'?'남성':'여성'} · ${r.subject.heightCm}cm`, lm, 22);
+  doc.text(new Date(r.date).toLocaleDateString('ko'), 195, 14, { align: 'right' });
+  
+  y = 40;
+  doc.setTextColor(0, 0, 0);
+  
+  // Overall Score
+  doc.setFontSize(14);
+  doc.text(`종합 점수: ${r.scores.overall.toFixed(0)}점 / 100점   [${r.scores.grade}]`, lm, y);
+  y += 8;
+  doc.setFontSize(9);
+  doc.text(`대칭성 ${r.scores.symmetry.toFixed(0)}점 (40%) | 전후정렬 ${r.scores.alignment.toFixed(0)}점 (30%) | 관절각도 ${r.scores.jointAngle.toFixed(0)}점 (30%)`, lm, y);
+  y += 10;
+  
+  // Symmetry Table
+  doc.setFontSize(11);
+  doc.setTextColor(24, 95, 165);
+  doc.text('◆ 대칭성 분석', lm, y); y += 6;
+  doc.setFontSize(8); doc.setTextColor(0, 0, 0);
+  
+  const symRows = [
+    ['어깨 높이 차이', `${r.symmetry.shoulderHeightDiff.toFixed(1)} cm`, '< 1.5 cm'],
+    ['어깨 기울기', `${r.symmetry.shoulderTiltAngle.toFixed(1)}°`, '< 2.0°'],
+    ['골반 높이 차이', `${r.symmetry.pelvicHeightDiff.toFixed(1)} cm`, '< 1.0 cm'],
+    ['골반 기울기', `${r.symmetry.pelvicTiltAngle.toFixed(1)}°`, '< 2.0°'],
+    ['무릎 높이 차이', `${r.symmetry.kneeHeightDiff.toFixed(1)} cm`, '< 1.0 cm'],
+    ['체간 편위', `${r.symmetry.trunkShift.toFixed(1)} cm`, '< 2.0 cm'],
+    ['다리 길이 차이', `${r.symmetry.legLengthDiff.toFixed(1)} cm`, '< 1.0 cm'],
+  ];
+  for (const row of symRows) {
+    doc.text(row[0], lm, y); doc.text(row[1], lm + 70, y); doc.text(row[2], lm + 120, y); y += 5;
+  }
+  y += 5;
+  
+  // Angles Table
+  doc.setFontSize(11); doc.setTextColor(24, 95, 165);
+  doc.text('◆ 관절 각도 분석', lm, y); y += 6;
+  doc.setFontSize(8); doc.setTextColor(0, 0, 0);
+  
+  const angRows = [
+    ['좌측 무릎', `${r.angles.leftKneeAngle.toFixed(1)}°`, '175-180°'],
+    ['우측 무릎', `${r.angles.rightKneeAngle.toFixed(1)}°`, '175-180°'],
+    ['경추전방전위(CVA)', `${r.angles.forwardHeadAngle.toFixed(1)}°`, '> 50°'],
+    ['흉추 후만', `${r.angles.thoracicKyphosis.toFixed(1)}°`, '20-45°'],
+    ['요추 전만', `${r.angles.lumbarLordosis.toFixed(1)}°`, '30-50°'],
+  ];
+  for (const row of angRows) {
+    doc.text(row[0], lm, y); doc.text(row[1], lm + 70, y); doc.text(row[2], lm + 120, y); y += 5;
+  }
+  y += 5;
+  
+  // Clinical Findings
+  if (r.findings.length > 0) {
+    doc.setFontSize(11); doc.setTextColor(24, 95, 165);
+    doc.text('◆ 임상 소견 & 위험요소', lm, y); y += 6;
+    doc.setFontSize(8); doc.setTextColor(0, 0, 0);
+    for (const f of r.findings) {
+      const sev = f.severity >= 2 ? '[경고]' : '[주의]';
+      doc.text(`${sev} ${f.condition}: ${f.detail}`, lm, y); y += 4;
+      doc.setTextColor(150, 100, 0);
+      doc.text(`  → ${f.risk}`, lm, y); y += 5;
+      doc.setTextColor(0, 0, 0);
+    }
+    y += 3;
+  }
+  
+  // Exercise Prescriptions
+  if (r.exercises.length > 0) {
+    if (y > 230) { doc.addPage(); y = 15; }
+    doc.setFontSize(11); doc.setTextColor(24, 95, 165);
+    doc.text('◆ ACSM FITT 운동처방', lm, y); y += 6;
+    doc.setFontSize(8); doc.setTextColor(0, 0, 0);
+    for (const group of r.exercises) {
+      doc.setFontSize(9);
+      doc.text(`▸ ${group.title}`, lm, y); y += 5;
+      doc.setFontSize(7.5);
+      for (const ex of group.items) {
+        if (y > 270) { doc.addPage(); y = 15; }
+        doc.text(`  [${ex.cat}] ${ex.name}`, lm, y); y += 4;
+        const meta = [ex.freq, ex.sets].filter(x => x && x !== '-').join(' / ');
+        if (meta) { doc.text(`    ${meta}`, lm, y); y += 4; }
+        if (ex.note) { doc.setTextColor(100,100,100); doc.text(`    💡 ${ex.note}`, lm, y); y += 4; doc.setTextColor(0,0,0); }
+      }
+      y += 3;
+    }
+  }
+  
+  // Disclaimer
+  y += 5;
+  doc.setFontSize(7); doc.setTextColor(150, 100, 0);
+  doc.text('⚠ 본 결과는 MediaPipe Pose 기반 추정치이며 임상 진단을 대체하지 않습니다.', lm, y);
+  
+  // Footer
+  doc.setFontSize(7); doc.setTextColor(150, 150, 150);
+  doc.text('AI Sports Tech Research Center · 광주보건대학교', lm, 287);
+  
+  doc.save(`체형분석_${r.subject.name}_${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('PDF가 다운로드되었습니다', 'success');
+};
+
+// ═══════════════════════════════════════
+// Toast
+// ═══════════════════════════════════════
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast toast-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+window.toast = toast;
+</script>
+
+</body>
+</html>
