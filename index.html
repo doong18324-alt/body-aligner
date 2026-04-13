@@ -345,7 +345,11 @@ function showScreen(id) {
 }
 
 window.goHome = () => { stopCamera(); showScreen('homeScreen'); };
-window.goSetup = () => showScreen('setupScreen');
+window.goSetup = () => {
+  showScreen('setupScreen');
+  const saved = localStorage.getItem('bodyaligner_sheets_url');
+  if (saved) document.getElementById('sheetsUrl').value = saved;
+};
 
 window.goCamera = async () => {
   state.subject.name = document.getElementById('subjectName').value || '미입력';
@@ -353,7 +357,8 @@ window.goCamera = async () => {
   state.subject.gender = document.getElementById('subjectGender').value;
   state.subject.heightCm = parseFloat(document.getElementById('subjectHeight').value) || 170;
   state.sheetsUrl = document.getElementById('sheetsUrl').value.trim();
-  
+  state.sheetsUrl = document.getElementById('sheetsUrl').value.trim();
+localStorage.setItem('bodyaligner_sheets_url', state.sheetsUrl);  // ← 추가
   state.phase = 'calibration';
   state.isCalibrated = false;
   state.captures = { anterior:null, lateral:null, posterior:null };
